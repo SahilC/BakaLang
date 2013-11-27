@@ -1,66 +1,78 @@
 %{
-	#include "node.h"
-	NBlock *programBlock;
-	extern int yylex();
-	void yyerror(const char *s) { printf("ERROR: %s",s);}
+    #include "node.h"
+    NBlock *programBlock; /* the top level root node of our final AST */
+
+    extern int yylex();
+    void yyerror(const char *s) { std::cout<<"ERROR: %s\n"<<s; }
 %}
 
+/* Represents the many different ways we can access our data */
 %union {
-	Node *node;
-	NBlock *block;
-	NExpression *expr;
-	NStatement *stmt;
-	NIdentifier *id;
-	NVariableDeclaration *var_decl;
-	std::vector<NVariableDeclaration*> *varvec;
-	std::vector<NExpression*> *exprvec;
-	std::string *string;
-	int token;
+    Node *node;
+    NBlock *block;
+    NExpression *expr;
+    NStatement *stmt;
+    NIdentifier *ident;
+    NVariableDeclaration *var_decl;
+    std::vector<NVariableDeclaration*> *varvec;
+    std::vector<NExpression*> *exprvec;
+    std::string *string;
+    int token;
 }
 
+/* Define our terminal symbols (tokens). This should
+   match our tokens.l lex file. We also define the node type
+   they represent.
+ */
 %token <string> TIDENTIFIER TINTEGER TDOUBLE
 %token <token> TCEQ TCNE TCLT TCLE TCGT TCGE TEQUAL
 %token <token> TLPAREN TRPAREN TLBRACE TRBRACE TCOMMA TDOT
 %token <token> TPLUS TMINUS TMUL TDIV
 
+/* Define the type of node our nonterminal symbols represent.
+   The types refer to the %union declaration above. Ex: when
+   we call an ident (defined by union type ident) we are really
+   calling an (NIdentifier*). It makes the compiler happy.
+ */
 %type <ident> ident
-%type <expr> numeric expr
+%type <expr> numeric expr 
 %type <varvec> func_decl_args
 %type <exprvec> call_args
 %type <block> program stmts block
 %type <stmt> stmt var_decl func_decl
 %type <token> comparison
 
-//op precedence
+/* Operator precedence for mathematical operators */
 %left TPLUS TMINUS
 %left TMUL TDIV
-
+%expect 24
 %start program
 
 %%
 
 program : stmts { programBlock = $1; }
-		;
-
-stmts : stmt { $$ = new NBlock(); $$->statements.push_back($<stmt>1);}
-      | stmts stmt  {$1->statements.push_back($<stmt>2); }
+        ;
+        
+stmts : stmt { $$ = new NBlock(); $$->statements.push_back($<stmt>1); }
+      | stmts stmt { $1->statements.push_back($<stmt>2); }
       ;
 
 stmt : var_decl | func_decl
      | expr { $$ = new NExpressionStatement(*$1); }
      ;
 
-block : TLBRACE stmts TRBRACE { $$=$2; }
-	  | TLBRACE TRBRACE { $$ = new NBlock(); }
-	  ;
+block : TLBRACE stmts TRBRACE { $$ = $2; }
+      | TLBRACE TRBRACE { $$ = new NBlock(); }
+      ;
 
-var_decl : ident ident { $$ = new NVariableDeclaration(*$1,*$2);}
-         | ident ident TEQUAL expr { $$ = new VariableDeclaration(*$1,*$2,*$4);}
+var_decl : ident ident { $$ = new NVariableDeclaration(*$1, *$2); }
+         | ident ident TEQUAL expr { $$ = new NVariableDeclaration(*$1, *$2, $4); }
          ;
-
-func_decl : ident ident TLPAREN func_decl_args TRPAREN block { $$ = new FunctionDeclaration(*$2,*$1,*$4,*$6); delete $4}
-		  ;
-
+        
+func_decl : ident ident TLPAREN func_decl_args TRPAREN block 
+            { $$ = new NFunctionDeclaration(*$1, *$2, *$4, *$6); delete $4; }
+          ;
+    
 func_decl_args : /*blank*/  { $$ = new VariableList(); }
           | var_decl { $$ = new VariableList(); $$->push_back($<var_decl>1); }
           | func_decl_args TCOMMA var_decl { $1->push_back($<var_decl>3); }
